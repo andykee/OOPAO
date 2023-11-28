@@ -238,7 +238,43 @@ class Telescope:
             axarr[1].imshow(self.focalMask)
             axarr[2].imshow(self.lyotStop)
 
-            
+    
+    def computeField(self, zeroPaddingFactor=2, N_crop=None):
+        if self.src is None:
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
+        N       = int(zeroPaddingFactor * self.resolution)        
+        center  = N//2           
+        norma   = N
+
+        if self.spatialFilter is not None:
+            raise NotImplementedError
+        
+        mask = 1
+        amp_mask = 1
+        phase = self.src.phase
+
+        # zeroPadded support for the FFT
+        supportPadded = np.zeros([N,N],dtype='complex')
+        supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
+        [xx,yy]                         = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
+        self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
+
+        # axis in arcsec
+        self.xfield_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yfield_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        
+        # axis in radians
+        self.xfield_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yfield_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        
+        # PSF computation
+        self.field        = (np.fft.fft2(supportPadded*self.phasor)*mask/norma)            
+ 
+        if N_crop is None:
+            N_crop = int(np.floor(2*N/6))
+    
+        self.field_zoom  = self.field[N_crop:-N_crop,N_crop:-N_crop]
+        
     
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
